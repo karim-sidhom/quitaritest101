@@ -119,11 +119,13 @@
         // Fallback local (jamais bloqué par CORS) utilisé UNIQUEMENT si le flux SNCFT Live réel
         // est inaccessible depuis cet environnement (fichier local, CSP d'artifact, etc.) — pour
         // que le simulateur reste utilisable même sans connexion au flux en direct.
+        // Noms de gares en français/orthographe SNCFT d'origine (obligatoire : ce sont les clés exactes que
+        // resolveStationCoord() doit reconnaître dans STATIONS pour lier le PN à la position réelle du train).
         const FALLBACK_TRAINS_DEMO = [
-            { num: '1637', curFr: 'تونس', nextFr: 'مدينة قبة' },
-            { num: '805', curFr: 'ضاحية تونس', nextFr: 'نابل' },
-            { num: '511', curFr: 'سوسة باب الجديد', nextFr: 'المهدية' },
-            { num: '143', curFr: 'تونس', nextFr: 'الرياض (الضاحية الجنوبية)' }
+            { num: '1637', curFr: 'Tunis', nextFr: 'Gobaa Ville' },
+            { num: '805', curFr: 'Tunis Banlieue', nextFr: 'Nabeul' },
+            { num: '511', curFr: 'Sousse Bab Jedid', nextFr: 'Mahdia' },
+            { num: '143', curFr: 'Tunis', nextFr: 'Erriadh' }
         ];
 
         // Largeur de zone de danger (Lz) par ligne — pas fournie par le flux SNCFT Live,
@@ -293,6 +295,239 @@ const PN_TUNISIE = [[36.95502,8.87554,0],[36.81733,10.18159,0],[36.74011,10.3166
         // (RAIL_LINES, 26 lignes) — ses coordonnées lat/lon sont remplacées par celles de ce point
         // projeté, donc distance au rail = 0 par construction pour TOUS les PN. Le statut gardé/non
         // gardé (p[2]) est conservé tel quel. Aucun seuil, aucune exclusion.
+
+        // ==== Données réelles importées telles quelles de index.html (Qitari) — base de coordonnées de gares
+        // (STATIONS), résolution de nom de gare (resolveStationCoord/stationNamesMatch), et calcul du sous-tracé
+        // réel entre deux gares sur la géométrie RAIL_LINES (kz_getTrackSubPath) — mêmes fonctions, mot pour mot,
+        // que le module "Super Terminator" de l'app principale. Permet de lier enfin le PN tiré à la position
+        // réelle du train (au lieu d'un tirage aléatoire déconnecté).
+// ==== Donnees reelles extraites de index.html (Qitari) ====
+const STATIONS = {
+  "Tozeur":[33.92464,8.13391], "Elouediane":[34.15236,8.2901], "Metlaoui":[34.33204,8.39963],
+  "Gafsa":[34.39404,8.80123], "Sened":[34.46497,9.03756], "Maknassy":[34.60095,9.59087],
+  "Gabes":[33.8842,10.09937], "Ghraiba":[34.49823,10.20517], "Maharès":[34.52727,10.50192],
+  // Gares ajoutées depuis le tableau "Ligne Grand Sud & Bassin Miniers" (coordonnées fournies par l'utilisateur)
+  "Skhira":[34.30156,10.06956], "Ghannouch":[33.93508,10.06558], "Zannouch":[34.44377,8.92933],
+  "El Ksar":[34.38557,8.78835], "Dégache":[33.98283,8.2081],
+  "Sfax Arrivée":[34.73996,10.76388], "Sfax Départ":[34.73996,10.76388],
+  "Sakiet Ezzit":[34.78892,10.76036], "La Hencha":[34.838,10.76552],
+  "El Jem":[35.29722,10.71333], "Kerker":[35.41534,10.71288], "Mahdia":[35.50083,11.06441],
+  "Monastir":[35.75796,10.8095], "Messadine":[35.73478,10.60512],
+  "Sousse Arrivée":[35.82853,10.60592], "Sousse Départ":[35.82853,10.60592],
+  "Kalaâ Seghira":[35.83153,10.56637], "Kalaâ Kebira":[35.8723,10.54935], "Enfidha":[36.1381,10.3809],
+  "Bouficha":[36.25869,10.4334], "Bir Bou Regba":[36.40551,10.53877], "Bouargoub":[36.51622,10.56179],
+  "Grombalia":[36.59875,10.49593], "Borj Cedria":[36.71481,10.36601], "Hammam Lif":[36.7304,10.33206],
+  "Tunis":[36.7924,10.18101],
+  "Nabeul":[36.45103,10.7351], "Hammamet":[36.40599,10.61609],
+  // ---------- Gares banlieue Tunis-Nabeul (horaire Hiver 2026-2027) — coordonnées interpolées approximativement le long de la voie existante Tunis→Bir Bou Regba→Hammamet→Nabeul, à corriger via l'éditeur ----------
+  "Foundouk Jedid":[36.685,10.412], "Khanguet":[36.641,10.458], "Turki":[36.569,10.522],
+  "Belli":[36.541,10.545], "Omar Khayem":[36.419,10.653], "M'Razga":[36.434,10.689],
+  // Gobaa (Ligne D) — orthographe SNCFT hiver 2026-2027 distincte de "Manouba" (ligne Bizerte/Annaba), même zone approximativement
+  "Mannouba":[36.8101,10.0935],
+  // ---------- Ligne Tunis ↔ Erriadh (banlieue sud, via Rades/Ez-Zahra/Hammam Lif) — hiver 2026-2027 — coordonnées interpolées
+  // approximativement entre Jebel Jelloud et Hammam Lif (existants) pour le 1er groupe, puis entre Hammam Lif et Bir El Bey
+  // (existants) pour le 2e groupe — à corriger via l'éditeur
+  "Megrine Ryadh":[36.7802,10.1829], "Megrine":[36.7748,10.1996], "Sidi Rezig":[36.7693,10.2163],
+  "Lycée Rades":[36.7639,10.2331], "Rades":[36.7581,10.2492], "Rades Meliane":[36.7527,10.2659],
+  "Ez-Zahra":[36.7472,10.2825], "Lycée Ezzahra":[36.7415,10.2989], "Bou Kornine":[36.7359,10.3155],
+  "Arret du Stade":[36.7254,10.3437], "Tahar Sfar":[36.7203,10.3554], "Hammam Chatt":[36.7153,10.3671],
+  // ---------- Métro du Sahel : Sousse Bab Jedid ↔ Mahdia (32 arrêts, dont "La Faculté" comptée deux fois — même
+  // gare unique construite autour d'un triangle de bifurcation, coordonnées exactes données par l'utilisateur)
+  // — hiver 2026-2027 — coordonnées des autres arrêts interpolées approximativement le long du corridor
+  // Sousse→Mahdia, à corriger via l'éditeur
+  "Sousse Med.V":[35.8211,10.6342], "Sousse Sud":[35.8075,10.645],
+  "Sousse Z.Ind":[35.794,10.658], "Sahline Ville":[35.782,10.672], "Sahline Sabkha":[35.771,10.685],
+  "Les Hôtels":[35.76,10.699], "L'Aéroport Monastir":[35.758,10.755], "La Faculté":[35.772,10.825],
+  "Monastir Z.Ind":[35.715,10.792], "Frina":[35.702,10.805], "Khniss-Bembla":[35.688,10.818],
+  "K.Med Bennane":[35.675,10.832], "Bouhjar":[35.662,10.846], "Lamta":[35.651,10.86],
+  "Sayada":[35.639,10.875], "Ksar Hellal Z.Ind":[35.628,10.89], "Ksar Hellal":[35.618,10.904],
+  "Moknine Gribâa":[35.608,10.919], "Moknine":[35.598,10.933], "Moknine Z.Ind":[35.588,10.948],
+  "Teboulba Z.Ind":[35.578,10.962], "Teboulba":[35.568,10.977],
+  "Baghdadi":[35.552,10.995], "Sidi Messoud":[35.541,11.01], "Ezzahra":[35.53,11.025],
+  "Mahdia Ezzahra":[35.519,11.04], "Borj El Arif":[35.508,11.055],
+  // Branche Métlaoui - Moulares - Redeyef (coordonnées très approximatives)
+  "Selja":[34.25,8.36], "Tabeddit 1er arrêt":[34.205,8.325], "Tabeddit 2ème arrêt":[34.182,8.31],
+  "Moulares":[34.485,8.278], "Redeyef":[34.3833,8.1667], "Magroun":[34.35,8.2167], "El Ayoun":[34.15,8.6833],
+  // Ligne L6 Tunis - Kalaâ Khasba (Le Kef) - coordonnées approximatives par interpolation
+  "Jebel Jelloud":[36.785,10.168], "Bir Kassaa":[36.745,10.22], "Naassen":[36.7265,10.1832],
+  "Khelidia":[36.68,10.12], "Oudna":[36.552,10.0489], "Cheylus":[36.735,9.696],
+  "Bir M'Cherga":[36.696,9.647], "Depienne":[36.5683,9.9247], "Pont du Fahs":[36.66,9.6],
+  "Bou Arada":[36.375,9.508], "El Aroussa":[36.383,9.436], "Sidi Ayed":[36.34,9.347],
+  "Gaafour":[36.333,9.333], "El Akhouat":[36.256,9.19], "El Krib":[36.25,9.176],
+  "Sidi Bou Rouis":[36.153,8.891], "Trika":[36.16,8.87], "Le Sers":[36.154,8.811],
+  "Les Salines":[36.15,8.744], "Les Zouarines":[36.1833,8.7667], "Dahmani":[36.2167,8.8167],
+  "Le Kef":[36.1666,8.704], "Ain Mesria":[35.86,8.54], "Fej et Tameur":[35.79,8.49],
+  "Gouraïa":[35.81,8.52], "Oued Sarrath":[35.75,8.5833], "Kalaâ Khasba":[35.5333,8.4333],
+  // Ligne Tunis - Béja - Jendouba - Ghardimaou - Souk Ahras - Annaba
+  "Manouba":[36.8101,10.0935], "Jedeida":[36.84454,9.91939], "Tebourba":[36.82814,9.8487],
+  "Borj Toum":[36.66221,9.55942], "Mejez El Bab":[36.6481,9.6094], "Oued Zarga":[36.7042,9.40741],
+  "Sidi M'Himech":[36.7566,9.35261], "Beja":[36.72894,9.18573], "Mastouta":[36.60801,9.05764],
+  "Sidi S'mail":[36.60748,8.94834], "Bousalem":[36.61116,8.96674], "Ben Bechir":[36.612,8.783],
+  "Jendouba":[36.50242,8.778], "Oued Meliz":[36.45437,8.6515], "Ghardimaou Arrivée":[36.44796,8.43758],
+  "Ghardimaou Départ":[36.44796,8.43758], "Souk Ahras Arrivée":[36.41359,8.40712],
+  "Souk Ahras Départ":[36.41359,8.40712], "Annaba":[36.44112,8.42772],
+  // Branche Tunis - Bizerte
+  "Sidi Othman":[36.84751,9.94945], "Chaouat":[36.8562,9.93107], "Ain Ghelal":[37.00886,9.74651],
+  "Mateur":[37.03611,9.66429], "Tinja":[37.12889,9.74349], "La Pecherie":[37.25071,9.83077],
+  "Bizerte":[37.26644,9.8639],
+  // Ligne D : Tunis - Gobaa (été 2026) - coordonnées approximatives, à corriger via l'éditeur
+  "Sayda Manoubia":[36.7932,10.1602], "Mellassine":[36.798,10.153], "Erraoudha":[36.808,10.132],
+  "Le Bardo":[36.806,10.138], "Elbortal":[36.812,10.115], "Les Orangers":[36.819,10.08],
+  "Gobaa":[36.825,10.04], "Gobaa Ville":[36.831,10.022],
+  // Ligne E : Tunis - Bougatfa (été 2026) - coordonnées approximatives, à corriger via l'éditeur
+  "Ennajah":[36.7938,10.1597], "Etayarane":[36.8059,10.1398], "Ezzouhour 2":[36.8111,10.1182],
+  "Elhrayria":[36.8174,10.0918], "Bougatfa":[36.8219,10.0617],
+  // ---------- Alias orthographiques SNCFT Live (ajoutés après comparaison directe avec le flux proxy.php réel) ----------
+  // Ces gares existent déjà ci-dessus mais SNCFT Live utilise une orthographe différente que stationNamesMatch() ne
+  // reconnaît pas (espace en plus, lettre en moins/en trop) — on ajoute donc le nom EXACT envoyé par SNCFT Live comme
+  // clé séparée, pointant vers les MÊMES coordonnées que la gare correspondante, sans toucher aux clés existantes.
+  "BOU SALEM":[36.61116,8.96674], "BEN BACHIR":[36.612,8.783], "NASSEN":[36.7265,10.1832],
+  "ENFIDA":[36.1381,10.3809], "MANNOUBA":[36.8101,10.0935],
+  // ---------- Gares complètement absentes, trouvées dans le flux SNCFT Live réel mais inexistantes dans STATIONS ----------
+  // Coordonnées obtenues via recherche de lieu réelle (Google Places) — à vérifier/ajuster via l'éditeur si besoin
+  "Erriadh":[36.6994516,10.415136], "Bir El Bey":[36.7102676,10.3787702], "Bir Aniba":[36.7954484,10.1574953],
+  "Sousse Bab Jedid":[35.823063,10.6415928], "Bekalta":[35.615241,10.9893645], "Bou Arkoub":[36.5311356,10.5515796],
+  "Mezzouna":[34.5774,9.8432], "Sousse Médina":[35.8313,10.6318], "Mnihla":[36.8956,10.1367],
+};
+
+function stripAccents(s){ return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function normName(s){ return stripAccents(s).toUpperCase().trim(); }
+function stationNamesMatch(a,b){
+  if(!a || !b) return false;
+  const na=normName(a), nb=normName(b);
+  if(!na || !nb) return false;
+  return na===nb || na.includes(nb) || nb.includes(na);
+}
+// تتحقق أن بيانات التأخير المباشرة حديثة فعلاً (وليست من جلسة قديمة/يوم سابق قد يكون التطبيق بقي مفتوحاً منذ ذلك الوقت)
+
+function resolveStationCoord(name){
+  if(!name) return null;
+  for(const k in STATIONS){
+    if(stationNamesMatch(k, name)) return STATIONS[k];
+  }
+  return null;
+}
+
+const KZ_TRACK_MATCH_MAX_ENDPOINT_M = 1500; // أقصى مسافة مقبولة بين المحطة وأقرب نقطة على الخط لاعتماد المطابقة
+function kz_nearestPointIndexOnLine(line, pos){
+  let bestIdx = 0, bestDist = Infinity;
+  for(let i=0;i<line.pts.length;i++){
+    const d = haversineTN(pos, line.pts[i]);
+    if(d<bestDist){ bestDist=d; bestIdx=i; }
+  }
+  return {idx:bestIdx, dist:bestDist};
+}
+function kz_findLineForSegment(A, B){
+  if(typeof RAIL_LINES === 'undefined' || !RAIL_LINES.length) return null;
+  let best = null;
+  RAIL_LINES.forEach(line=>{
+    const na = kz_nearestPointIndexOnLine(line, A);
+    const nb = kz_nearestPointIndexOnLine(line, B);
+    const score = na.dist + nb.dist;
+    if(!best || score<best.score){
+      best = {line, idxA:na.idx, idxB:nb.idx, distA:na.dist, distB:nb.dist, score};
+    }
+  });
+  return best;
+}
+function kz_buildSubPath(match){
+  const pts = match.line.pts;
+  if(match.idxA<=match.idxB) return pts.slice(match.idxA, match.idxB+1);
+  return pts.slice(match.idxB, match.idxA+1).slice().reverse();
+}
+function kz_closestOnPolyline(userPos, pathPts){
+  if(!pathPts || pathPts.length<2) return null;
+  let total=0; const cum=[0];
+  for(let i=0;i<pathPts.length-1;i++){ total += haversineTN(pathPts[i],pathPts[i+1]); cum.push(total); }
+  if(total===0) return null;
+  let best=null;
+  for(let i=0;i<pathPts.length-1;i++){
+    const A=pathPts[i], B=pathPts[i+1];
+    const t = projectT(userPos, A, B);
+    const px = A[0]+(B[0]-A[0])*t, py = A[1]+(B[1]-A[1])*t;
+    const d = haversineTN(userPos, [px,py]);
+    if(!best || d<best.dist){
+      const distAlong = cum[i] + t*haversineTN(A,B);
+      best = {dist:d, u: distAlong/total};
+    }
+  }
+  return best;
+}
+const kzSegmentTrackCache = new Map();
+function kz_getTrackSubPath(A, B, nameA, nameB){
+  const key = nameA + '→' + nameB;
+  if(kzSegmentTrackCache.has(key)) return kzSegmentTrackCache.get(key);
+  let result = null;
+  if(typeof RAIL_LINES !== 'undefined' && RAIL_LINES.length){
+    const match = (typeof RAIL_LINES_MERGED !== 'undefined') ? kz_findLineForSegmentMerged(A, B) : kz_findLineForSegment(A, B);
+    if(match && match.distA<=KZ_TRACK_MATCH_MAX_ENDPOINT_M && match.distB<=KZ_TRACK_MATCH_MAX_ENDPOINT_M && match.idxA!==match.idxB){
+      result = kz_buildSubPath(match);
+    }
+  }
+  kzSegmentTrackCache.set(key, result);
+  return result;
+}
+
+// ---- Correctifs ajoutés dans ce simulateur (absents de index.html) pour lier plus de trajets à un vrai segment ----
+// 1) Fusion des tronçons RAIL_LINES qui partagent le même "code" (ex: deux entrées "22" mises bout à bout dans la
+//    donnée d'origine — vérifié : le dernier point du 1er tronçon == 1er point du 2e, donc fusion sans risque).
+//    Corrige par ex. Sousse Bab Jedid → Mahdia (les deux gares tombaient chacune sur un tronçon "22" différent).
+const RAIL_LINES_MERGED = (function(){
+    const byCode = new Map();
+    RAIL_LINES.forEach(l => {
+        if(!byCode.has(l.code)) byCode.set(l.code, []);
+        byCode.get(l.code).push(l);
+    });
+    const out = [];
+    byCode.forEach((chunks, code) => {
+        if(chunks.length === 1){ out.push(chunks[0]); return; }
+        let pts = chunks[0].pts.slice();
+        for(let i=1;i<chunks.length;i++){
+            const prevEnd = pts[pts.length-1];
+            const nextStart = chunks[i].pts[0];
+            if(haversineTN(prevEnd, nextStart) < 5){
+                pts = pts.concat(chunks[i].pts.slice(1)); // bout à bout confirmé, on ne duplique pas le point commun
+            } else {
+                out.push({code, name: chunks[i].name, pts: chunks[i].pts}); // pas contigu : on garde séparé par prudence
+            }
+        }
+        out.push({code, name: chunks[0].name, pts});
+    });
+    return out;
+})();
+function kz_findLineForSegmentMerged(A, B){
+    let best = null;
+    RAIL_LINES_MERGED.forEach(line=>{
+        const na = kz_nearestPointIndexOnLine(line, A);
+        const nb = kz_nearestPointIndexOnLine(line, B);
+        const score = na.dist + nb.dist;
+        if(!best || score<best.score) best = {line, idxA:na.idx, idxB:nb.idx, distA:na.dist, distB:nb.dist, score};
+    });
+    return best;
+}
+// 2) Routage via jonction connue : si aucune ligne unique ne couvre A→B (cas d'un trajet passant par un
+//    embranchement, ex. Tunis→Nabeul via Bir Bou Regba, sur deux lignes différentes), on essaie de relier A→J
+//    puis J→B pour quelques jonctions majeures connues du réseau.
+const JONCTIONS_CONNUES = ["Bir Bou Regba", "Jebel Jelloud", "Sousse Arrivée", "Gobaa", "Mannouba", "Bir El Bey"];
+function kz_getTrackSubPathAvecJonction(A, B, nameA, nameB){
+    const direct = kz_getTrackSubPath(A, B, nameA, nameB);
+    if(direct) return direct;
+    for(const jNom of JONCTIONS_CONNUES){
+        const J = resolveStationCoord(jNom);
+        if(!J) continue;
+        if(haversineTN(A,J) < 200 || haversineTN(B,J) < 200) continue; // jonction = une des deux gares elle-même
+        const seg1 = kz_getTrackSubPath(A, J, nameA, jNom);
+        const seg2 = kz_getTrackSubPath(J, B, jNom, nameB);
+        if(seg1 && seg2){
+            return seg1.concat(seg2.slice(1)); // bout à bout à la jonction, sans dupliquer le point commun
+        }
+    }
+    return null;
+}
+
+const AVG_TRAIN_SPEED_KMH = 60;
+
+
         const PN_TUNISIE_COUVERT = PN_TUNISIE.map(p => {
             const proj = kz_nearestPointOnTrackRL([p[0], p[1]]);
             return [proj.lat, proj.lon, p[2]];
@@ -360,23 +595,52 @@ const PN_TUNISIE = [[36.95502,8.87554,0],[36.81733,10.18159,0],[36.74011,10.3166
             // ---------- Qitari vs SIL4 : ce tableau de risque (statut) EST le résultat du système physique
             // SIL4 (barrière/feu rouge classique) — on ajoute maintenant l'alarme Qitari indépendante (GPS+ETA)
             // pour comparer les deux systèmes sur le même événement réel, comme demandé.
-            // Le scénario est rattaché à un vrai PN tiré dans PN_TUNISIE_COUVERT (1923 PN, tous ramenés sur les 26 lignes
-            // réellement suivies par Qitari — RAIL_LINES), pas dans la liste OSM brute complète.
+            // Le scénario est rattaché à un vrai PN, désormais choisi sur le SEGMENT RÉEL parcouru par le train
+            // tiré (ltReel.curFr → ltReel.nextFr), via les mêmes fonctions que le module Terminator de Qitari
+            // (resolveStationCoord + kz_getTrackSubPath) — PN et train ne sont plus deux tirages indépendants.
             // SIL4 n'existe physiquement QUE si ce PN est gardé (barrière confirmée) — sinon aucune barrière
             // physique n'existe à cet endroit et SIL4 ne peut structurellement pas se déclencher.
-            const pn = tirerPN();
+            let pn, tempsArriveeTrainS;
+            const curCoord = resolveStationCoord(ltReel.curFr);
+            const nextCoord = resolveStationCoord(ltReel.nextFr);
+            const subPath = (curCoord && nextCoord) ? kz_getTrackSubPathAvecJonction(curCoord, nextCoord, ltReel.curFr, ltReel.nextFr) : null;
 
-            // Temps d'arrivée réel du train (déjà en circulation) jusqu'au PN tiré. Tirage 0 à 5 min (300s) —
-            // borne max fixée arbitrairement en l'absence de valeur fournie par l'utilisateur.
-            // C'est LA même valeur utilisée à la fois pour définir le danger réel et pour l'ETA que Qitari évalue,
-            // au lieu de deux tirages indépendants et incohérents comme avant.
-            const TEMPS_ARRIVEE_TRAIN_MAX_S = 300;
-            const tempsArriveeTrainS = Math.random() * TEMPS_ARRIVEE_TRAIN_MAX_S;
+            if (subPath && subPath.length >= 2) {
+                // Longueur réelle du segment (somme des distances le long de la géométrie RAIL_LINES, pas une ligne droite)
+                let segLenM = 0;
+                for (let i = 0; i < subPath.length - 1; i++) segLenM += haversineTN(subPath[i], subPath[i+1]);
+
+                // PN réellement situés sur CE segment précis (à ≤50m de la géométrie du segment)
+                const pnSurCeSegment = PN_TUNISIE_COUVERT
+                    .map(p => ({ p, onSeg: kz_closestOnPolyline([p[0], p[1]], subPath) }))
+                    .filter(x => x.onSeg && x.onSeg.dist <= 50);
+
+                if (pnSurCeSegment.length > 0 && segLenM > 0) {
+                    const choix = pnSurCeSegment[Math.floor(Math.random() * pnSurCeSegment.length)];
+                    pn = { lat: choix.p[0], lon: choix.p[1], garde: choix.p[2] === 1 };
+                    const pnPosAlongM = choix.onSeg.u * segLenM;
+                    // Position du train sur le segment : le flux SNCFT Live ne donne pas de % précis entre les
+                    // deux gares, donc tirée uniformément sur le segment RÉEL (pas sur tout le réseau comme avant).
+                    const trainPosAlongM = Math.random() * segLenM;
+                    const distanceM = Math.abs(pnPosAlongM - trainPosAlongM);
+                    tempsArriveeTrainS = distanceM / (AVG_TRAIN_SPEED_KMH * 1000 / 3600); // vitesse moyenne réelle SNCFT (même constante que Qitari)
+                } else {
+                    // Segment réel identifié mais aucun PN dessus (couvert par des vraies données) : bouche-trou documenté
+                    pn = tirerPN();
+                    tempsArriveeTrainS = Math.random() * 300;
+                }
+            } else {
+                // Gares non résolues dans STATIONS (nom absent/orthographe non reconnue) : bouche-trou documenté,
+                // identique à l'ancien comportement — limite connue, pas cachée.
+                pn = tirerPN();
+                tempsArriveeTrainS = Math.random() * 300;
+            }
 
             // Danger réel = vraie course contre la montre : le train arrive-t-il AVANT que le véhicule ait fini
             // de dégager la voie ? Ce n'est plus seulement "le véhicule met du temps à dégager" (T_passage élevé) :
             // un T_passage de 15s n'est dangereux QUE si un train arrive dans ces 15s. Sans cette condition, un
             // train encore à 3-5 minutes ne peut physiquement pas percuter le véhicule, quel que soit T_passage.
+
             const dangerReel = (tempsArriveeTrainS < tempsDegagement);
             // Fenêtre de tir réelle SIL4 : 14 à 20 secondes maximum (donnée fournie) — capacité physique du système,
             // PAS la définition du danger. Entre 11s et 14s (Zone Grise) ou au-delà de 20s, il y a un danger réel
@@ -631,9 +895,9 @@ const PN_TUNISIE = [[36.95502,8.87554,0],[36.81733,10.18159,0],[36.74011,10.3166
             const statTauxSil4TousPN = document.getElementById('statTauxSil4TousPN');
             if (statTotal) statTotal.innerText = stats.total;
             if (statConflits) statConflits.innerText = stats.conflits;
-            if (statTauxQitari) statTauxQitari.innerText = (stats.dangerCases > 0 ? ((stats.qitariHits / stats.dangerCases) * 100).toFixed(1) : '--') + '%';
-            if (statTauxSil4) statTauxSil4.innerText = (stats.dangerCases > 0 ? ((stats.sil4Hits / stats.dangerCases) * 100).toFixed(1) : '--') + '%';
-            if (statTauxSil4TousPN) statTauxSil4TousPN.innerText = (stats.dangerCases > 0 ? ((stats.sil4TousPNHits / stats.dangerCases) * 100).toFixed(1) : '--') + '%';
+            if (statTauxQitari) statTauxQitari.innerText = (stats.dangerCases > 0 ? ((stats.qitariHits / stats.dangerCases) * 100).toFixed(1) + '%' : `-- (${stats.total} سيناريو، 0 خطر بعد)`);
+            if (statTauxSil4) statTauxSil4.innerText = (stats.dangerCases > 0 ? ((stats.sil4Hits / stats.dangerCases) * 100).toFixed(1) + '%' : `-- (${stats.total} سيناريو، 0 خطر بعد)`);
+            if (statTauxSil4TousPN) statTauxSil4TousPN.innerText = (stats.dangerCases > 0 ? ((stats.sil4TousPNHits / stats.dangerCases) * 100).toFixed(1) + '%' : `-- (${stats.total} سيناريو، 0 خطر بعد)`);
         }
     </script>
 </body>
